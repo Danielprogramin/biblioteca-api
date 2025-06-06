@@ -18,7 +18,7 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 });
-    
+
 Route::get('/sanctum/csrf-cookie', [CsrfCookieController::class, 'show']);
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -31,4 +31,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('bibliotecas', BibliotecaController::class);
+});
+
+Route::get('/dashboard', function () {
+    return response()->json([
+        'message' => 'Welcome to the API',
+    ]);
 });
