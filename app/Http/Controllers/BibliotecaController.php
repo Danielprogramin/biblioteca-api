@@ -19,25 +19,53 @@ class BibliotecaController extends Controller
     /**
      * Store a newly created resource in storage.
      */
+
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'tipo_documento' => 'required|string',
-            'denominacion' => 'required|string',
-            'denominacion_numerica' => 'required|string',
-            'titulo' => 'required|string',
-            'autor' => 'required|string',
-            'editorial' => 'required|string',
-            'tomo' => 'nullable|string',
-            'año' => 'required|integer',
-            'pais' => 'required|string',
-            'archivo' => 'nullable|string',
-        ]);
+        try {
+            // Validación corregida
+            $validated = $request->validate([
+                'tipo_documento' => 'required|string',
+                'denominacion' => 'required|string|size:2',
+                'denominacion_numerica' => 'required|string',
+                'titulo' => 'required|string',
+                'autor' => 'required|string',
+                'editorial' => 'nullable|string',  // Cambiado a nullable
+                'tomo' => 'nullable|string',
+                'año' => 'required|digits:4',     // Cambiado a digits:4
+                'pais' => 'required|string',
+                'archivo' => 'required|file|mimes:pdf|max:10240', // Requerido y validación de PDF
+            ]);
 
-        $biblioteca = Biblioteca::create($validated);
-        return response()->json($biblioteca, 201);
+            // Almacenar archivo en disco público
+            $filePath = $request->file('archivo')->store('bibliotecas', 'public');
+            $validated['archivo'] = $filePath;
+
+            $biblioteca = Biblioteca::create($validated);
+
+            return response()->json([
+                'message' => 'Documento guardado exitosamente',
+                'data' => $biblioteca
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Capturar errores de validación específicos
+            return response()->json([
+                'message' => 'Error de validación',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            // Log detallado del error
+            Log::error('Error al guardar documento: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+
+            return response()->json([
+                'message' => 'Error interno del servidor',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
-
     /**
      * Display the specified resource.
      */
@@ -64,7 +92,7 @@ class BibliotecaController extends Controller
             'tomo' => 'nullable|string',
             'año' => 'sometimes|required|integer',
             'pais' => 'sometimes|required|string',
-            'archivo' => 'nullable|string',
+            'archivo' => 'nullable|file',
         ]);
 
         $biblioteca->update($validated);
