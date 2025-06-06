@@ -26,20 +26,23 @@ class BibliotecaController extends Controller
             // Validación corregida
             $validated = $request->validate([
                 'tipo_documento' => 'required|string',
-                'denominacion' => 'required|string|size:2',
+                'denominacion' => 'required|string',
                 'denominacion_numerica' => 'required|string',
                 'titulo' => 'required|string',
                 'autor' => 'required|string',
-                'editorial' => 'nullable|string',  // Cambiado a nullable
+                'editorial' => 'nullable|string',
                 'tomo' => 'nullable|string',
-                'año' => 'required|digits:4',     // Cambiado a digits:4
+                'año' => 'required|digits:4',
                 'pais' => 'required|string',
                 'archivo' => 'required|file|mimes:pdf|max:10240', // Requerido y validación de PDF
             ]);
 
-            // Almacenar archivo en disco público
-            $filePath = $request->file('archivo')->store('bibliotecas', 'public');
-            $validated['archivo'] = $filePath;
+            // Almacenar archivo con su nombre original
+            if ($request->hasFile('archivo')) {
+                $originalName = $request->file('archivo')->getClientOriginalName();
+                $filePath = $request->file('archivo')->storeAs('bibliotecas', $originalName, 'public');
+                $validated['archivo'] = $filePath;
+            }
 
             $biblioteca = Biblioteca::create($validated);
 
@@ -49,14 +52,12 @@ class BibliotecaController extends Controller
             ], 201);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
-            // Capturar errores de validación específicos
             return response()->json([
                 'message' => 'Error de validación',
                 'errors' => $e->errors()
             ], 422);
 
         } catch (\Exception $e) {
-            // Log detallado del error
             Log::error('Error al guardar documento: ' . $e->getMessage());
             Log::error($e->getTraceAsString());
 
