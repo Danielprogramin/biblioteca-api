@@ -59,8 +59,8 @@ class User extends Authenticatable
      * relacion con Empleado
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<User, Empleado>
      */
-    public function empleado()
-    {
-        return $this->belongsTo(Empleado::class);
-    }
+    // public function empleado()
+    // {
+    //     return $this->belongsTo(Empleado::class);
+    // }
 }

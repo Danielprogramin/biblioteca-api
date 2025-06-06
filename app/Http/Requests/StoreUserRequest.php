@@ -23,13 +23,11 @@ class StoreUserRequest extends FormRequest
     {
         return [
             'username' => 'required|string|max:50|unique:users,username',
-            // 'persona' => 'nullable|string|max:255',
-            // 'email' => 'required|string|email|max:255|unique:users,email',
+            'email' => 'required|string|email|max:255|unique:users,email',
             'password' => 'required|string|min:8',
             'is_admin' => 'required|boolean',
             'estado' => 'required|boolean',
             'fecha_expiracion' => 'nullable|date|after_or_equal:today',
-            'empleado_id' => 'required|exists:empleados,id|unique:users,empleado_id',
         ];
     }
 }

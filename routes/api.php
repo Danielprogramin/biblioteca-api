@@ -3,7 +3,6 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\EmpleadoController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\BibliotecaController;
@@ -23,7 +22,6 @@ Route::get('/sanctum/csrf-cookie', [CsrfCookieController::class, 'show']);
 
 Route::middleware('auth:sanctum')->group(function () {
 
-    Route::apiResource('empleados', EmpleadoController::class);
     Route::apiResource('usuarios', UserController::class);
     Route::apiResource('roles', RoleController::class);
 

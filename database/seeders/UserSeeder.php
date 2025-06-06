@@ -36,7 +36,7 @@ class UserSeeder extends Seeder
             'username' => 'digitador',
             'email' => 'digitador@example.com',
             'password' => Hash::make('password'),
-            'is_admin' => true,
+            'is_admin' => false,
         ])->assignRole($roleDigitador);
 
 

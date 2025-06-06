@@ -15,7 +15,7 @@ return new class extends Migration {
 
             // columnas para la tabla users
             $table->string('username')->unique();
-            $table->string('persona')->nullable();
+            // $table->string('persona')->nullable();
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
@@ -27,7 +27,7 @@ return new class extends Migration {
             $table->softDeletes();
 
             // relatiosn with other tables
-            $table->foreignId('empleado_id')->unique()->nullable()->constrained('empleados')->onDelete('cascade');
+            // $table->foreignId('empleado_id')->unique()->nullable()->constrained('empleados')->onDelete('cascade');
         });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {

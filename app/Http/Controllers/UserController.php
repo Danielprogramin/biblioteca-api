@@ -32,22 +32,15 @@ class UserController extends Controller
     public function store(StoreUserRequest $request)
     {
         try {
-            // Obtener el empleado relacionado
-            $empleado = Empleado::findOrFail($request->empleado_id);
 
-            // Construir el campo persona con los nombres y apellidos del empleado
-            $persona = trim("{$empleado->primer_nombre} {$empleado->segundo_nombre} {$empleado->primer_apellido} {$empleado->segundo_apellido}");
-
-            // Crear el usuario
             $user = User::create([
                 'username' => $request->username,
-                'persona' => $persona,
-                'email' => $empleado->correo, // Sincronizar el correo con el del empleado
+                'email' => $request->email,
                 'password' => bcrypt($request->password),
                 'is_admin' => $request->is_admin ?? false,
                 'estado' => $request->estado ?? true,
                 'fecha_expiracion' => $request->fecha_expiracion,
-                'empleado_id' => $request->empleado_id,
+
             ]);
 
             return response()->json([
