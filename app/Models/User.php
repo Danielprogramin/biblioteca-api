@@ -53,6 +53,11 @@ class User extends Authenticatable
         ];
     }
 
+    public function auditLogs()
+{
+    return $this->hasMany(AuditLog::class);
+}
+
     // relaciones con otras tablas
 
     /**

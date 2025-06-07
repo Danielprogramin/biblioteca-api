@@ -7,6 +7,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\BibliotecaController;
 use Laravel\Sanctum\Http\Controllers\CsrfCookieController;
+use App\Http\Controllers\AuditLogController;
 
 Route::get('/', function () {
     return "welcome to the API";
@@ -36,3 +37,12 @@ Route::get('/dashboard', function () {
         'message' => 'Welcome to the API',
     ]);
 });
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/audit-logs', [AuditLogController::class, 'index']);
+    Route::get('/audit-logs/export', [AuditLogController::class, 'export']);
+    Route::get('/audit-logs/user-stats', [AuditLogController::class, 'userStats']);
+    Route::get('/audit-logs/daily-stats', [AuditLogController::class, 'dailyStats']);
+    
+});
+
