@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\UserSession;
 use App\Models\ModuleActivity;
+use App\Models\DailyUserStat;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Carbon\Carbon;
 
 class AuditLogController extends Controller
 {
@@ -115,32 +118,105 @@ class AuditLogController extends Controller
         return response()->json($stats);
     }
 
-    // Productividad diaria por usuario y tipo de documento (ejemplo)
-    public function dailyStats(Request $request)
+    public function getDailyStats(Request $request)
     {
-        // Suponiendo que tienes un modelo ModuleActivity para esto
-        $stats = ModuleActivity::select(
+        $request->validate([
+            'fecha_desde' => 'nullable|date',
+            'fecha_hasta' => 'nullable|date|after_or_equal:fecha_desde',
+            'usuario' => 'nullable|exists:users,id',
+        ]);
+
+        $query = DailyUserStat::query()
+            ->select([
                 'fecha',
                 'user_id',
-                DB::raw('SUM(acciones_crear) as libros'),
-                DB::raw('SUM(acciones_editar) as librosAnillados'),
-                DB::raw('SUM(acciones_eliminar) as azs'),
-                DB::raw('SUM(total_acciones) as total')
-            )
+                DB::raw("SUM(CASE WHEN tipo_documento = 'libros' THEN documentos_procesados ELSE 0 END) as libros"),
+                DB::raw("SUM(CASE WHEN tipo_documento = 'libros_anillados' THEN documentos_procesados ELSE 0 END) as libros_anillados"),
+                DB::raw("SUM(CASE WHEN tipo_documento = 'azs' THEN documentos_procesados ELSE 0 END) as azs"),
+                DB::raw("SUM(documentos_procesados) as total")
+            ])
             ->groupBy('fecha', 'user_id')
-            ->with('user:id,username')
-            ->get()
-            ->map(function ($row) {
-                return [
-                    'fecha' => $row->fecha,
-                    'usuario' => $row->user->username ?? '',
-                    'libros' => $row->libros,
-                    'librosAnillados' => $row->librosAnillados,
-                    'azs' => $row->azs,
-                    'total' => $row->total,
-                ];
-            });
+            ->orderBy('fecha', 'desc');
 
-        return response()->json($stats);
+        // Filtrar por rango de fechas
+        if ($request->fecha_desde) {
+            $query->where('fecha', '>=', $request->fecha_desde);
+        }
+
+        if ($request->fecha_hasta) {
+            $query->where('fecha', '<=', $request->fecha_hasta);
+        }
+
+        // Filtrar por usuario
+        if ($request->usuario && $request->usuario !== 'todos') {
+            $query->where('user_id', $request->usuario);
+        }
+
+        $stats = $query->get();
+
+        // Calcular totales del período
+        $periodTotals = [
+            'libros' => $stats->sum('libros'),
+            'libros_anillados' => $stats->sum('libros_anillados'),
+            'azs' => $stats->sum('azs'),
+            'total' => $stats->sum('total')
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $stats,
+            'period_totals' => $periodTotals,
+        ]);
+    }
+
+    protected function applyQuickFilter($filter)
+    {
+        $today = Carbon::today();
+        
+        switch ($filter) {
+            case 'hoy':
+                return [
+                    'from' => $today->format('Y-m-d'),
+                    'to' => $today->format('Y-m-d')
+                ];
+            case 'ayer':
+                return [
+                    'from' => $today->subDay()->format('Y-m-d'),
+                    'to' => $today->format('Y-m-d')
+                ];
+            case 'ultima-semana':
+                return [
+                    'from' => $today->subWeek()->startOfWeek()->format('Y-m-d'),
+                    'to' => $today->subWeek()->endOfWeek()->format('Y-m-d')
+                ];
+            case 'esta-semana':
+                return [
+                    'from' => $today->startOfWeek()->format('Y-m-d'),
+                    'to' => $today->endOfWeek()->format('Y-m-d')
+                ];
+            case 'este-mes':
+                return [
+                    'from' => $today->startOfMonth()->format('Y-m-d'),
+                    'to' => $today->endOfMonth()->format('Y-m-d')
+                ];
+            case 'mes-anterior':
+                return [
+                    'from' => $today->subMonth()->startOfMonth()->format('Y-m-d'),
+                    'to' => $today->endOfMonth()->format('Y-m-d')
+                ];
+            default:
+                return [
+                    'from' => $today->subMonth()->format('Y-m-d'),
+                    'to' => $today->format('Y-m-d')
+                ];
+        }
+    }
+
+    public function exportDailyStats(Request $request)
+    {
+        // Similar a dailyStats pero para exportar a Excel
+        $stats = $this->getFilteredStats($request);
+
+        return Excel::download(new DailyStatsExport($stats), 'productividad-diaria.xlsx');
     }
 }

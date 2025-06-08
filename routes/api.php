@@ -42,7 +42,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/audit-logs', [AuditLogController::class, 'index']);
     Route::get('/audit-logs/export', [AuditLogController::class, 'export']);
     Route::get('/audit-logs/user-stats', [AuditLogController::class, 'userStats']);
-    Route::get('/audit-logs/daily-stats', [AuditLogController::class, 'dailyStats']);
+    Route::get('/audit-logs/daily-stats', [AuditLogController::class, 'getDailyStats']);
     
 });
 

@@ -6,6 +6,11 @@ use Illuminate\Http\Request;
 use App\Models\Biblioteca;
 use Illuminate\Support\Facades\Log;
 use App\Traits\logActivity;
+use App\Models\DailyUserStat;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+
 
 class BibliotecaController extends Controller
 {
@@ -52,6 +57,9 @@ class BibliotecaController extends Controller
                     'codigo' => $biblioteca->denominacion_numerica
                 ]
             );
+
+             // Registrar en las estadísticas diarias
+            $this->recordDailyStat($biblioteca->tipo_documento);
 
             return response()->json([
                 'message' => 'Documento guardado exitosamente',
@@ -130,4 +138,19 @@ class BibliotecaController extends Controller
 
         return response()->json(['message' => 'Registro eliminado correctamente']);
     }
+    protected function recordDailyStat($tipoDocumento)
+{
+    $today = Carbon::today()->toDateString();
+    $userId = Auth::id();
+
+    $stat = DailyUserStat::firstOrNew([
+        'user_id' => $userId,
+        'fecha' => $today,
+        'tipo_documento' => $tipoDocumento,
+    ]);
+
+    // Si ya existe, incrementa, si no, inicializa con 1
+    $stat->documentos_procesados = $stat->exists ? $stat->documentos_procesados + 1 : 1;
+    $stat->save();
+}
 }

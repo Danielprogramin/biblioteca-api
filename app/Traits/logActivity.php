@@ -7,6 +7,8 @@ trait logActivity
 {
     public function logActivity($accion, $modulo, $descripcion, $detalles = null)
     {
+        // $user = Auth::user();
+        
         AuditLog::create([
             'user_id' => auth()->user()->id,
             'usuario' => auth()->user()->username ?? auth()->user()->name ?? 'desconocido',

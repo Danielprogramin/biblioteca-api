@@ -6,36 +6,21 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('daily_user_stats', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->enum('tipo_documento', ['libros', 'libros_anillados', 'azs']);
+            $table->integer('documentos_procesados')->default(0);
             $table->date('fecha');
-            $table->integer('documentos_creados')->default(0);
-            $table->integer('documentos_editados')->default(0);
-            $table->integer('documentos_eliminados')->default(0);
-            $table->integer('consultas_realizadas')->default(0);
-            $table->integer('libros_creados')->default(0);
-            $table->integer('libros_anillados_creados')->default(0);
-            $table->integer('azs_creados')->default(0);
-            $table->integer('tiempo_sesion_minutos')->default(0);
-            $table->time('primera_actividad')->nullable();
-            $table->time('ultima_actividad')->nullable();
+            $table->text('observaciones')->nullable();
             $table->timestamps();
-
-            $table->unique(['user_id', 'fecha']);
-            $table->index('fecha');
-            $table->index(['user_id', 'fecha']);
+            
+            $table->index(['fecha', 'user_id']);
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('daily_user_stats');
