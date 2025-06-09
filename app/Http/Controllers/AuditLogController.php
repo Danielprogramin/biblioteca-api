@@ -13,8 +13,8 @@ use Carbon\Carbon;
 
 class AuditLogController extends Controller
 {
-    // Listado de logs con filtros y búsqueda
-     public function index(Request $request)
+    // Listado de logs con filtros y búsqueda y paginación
+    public function index(Request $request)
     {
         $query = AuditLog::with('user');
 
@@ -33,7 +33,8 @@ class AuditLogController extends Controller
             $query->where('descripcion', 'like', "%{$request->search}%");
         }
 
-        return $query->latest()->get();
+        $perPage = $request->input('per_page', 15); // Puedes cambiar el valor por defecto
+        return $query->latest()->paginate($perPage);
     }
 
     // Exportar log a CSV
