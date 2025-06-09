@@ -32,7 +32,7 @@ class BibliotecaController extends Controller
                 'titulo' => 'required|string',
                 'autor' => 'required|string',
                 'editorial' => 'nullable|string',
-                'tomo' => 'nullable|string',
+                'tomo' => 'nullable|integer|min:1',
                 'año' => 'required|digits:4',
                 'pais' => 'required|string',
                 'archivo' => 'required|file|mimes:pdf|max:10240',

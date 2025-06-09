@@ -18,7 +18,7 @@ return new class extends Migration {
             $table->string('titulo');
             $table->string('autor');
             $table->string('editorial')->nullable();
-            $table->string('tomo')->nullable();
+            $table->unsignedInteger('tomo')->nullable();
             $table->year('año')->nullable();
             $table->string('pais')->nullable();
             $table->string('archivo');
