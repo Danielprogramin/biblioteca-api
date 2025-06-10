@@ -11,12 +11,12 @@ return new class extends Migration
         Schema::create('daily_user_stats', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->enum('tipo_documento', ['libros', 'libros_anillados', 'azs']);
+            $table->enum('tipo_documento', ['LIBROS', 'LIBROS_ANILLADOS', 'AZS']);
             $table->integer('documentos_procesados')->default(0);
             $table->date('fecha');
             $table->text('observaciones')->nullable();
             $table->timestamps();
-            
+
             $table->index(['fecha', 'user_id']);
         });
     }
