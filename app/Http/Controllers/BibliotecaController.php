@@ -32,16 +32,16 @@ class BibliotecaController extends Controller
                 'titulo' => 'required|string',
                 'autor' => 'required|string',
                 'editorial' => 'nullable|string',
-                'tomo' => 'nullable|integer|min:1',
+                'tomo' => 'nullable|string',
                 'año' => 'required|digits:4',
                 'pais' => 'required|string',
                 'archivo' => 'required|file|mimes:pdf|max:10240',
             ]);
 
-            // Convertir todos los valores a mayúsculas
-            $validated = array_map(function ($value) {
-                return is_string($value) ? strtoupper($value) : $value;
-            }, $validated);
+            // // Convertir todos los valores a mayúsculas
+            // $validated = array_map(function ($value) {
+            //     return is_string($value) ? strtoupper($value) : $value;
+            // }, $validated);
 
             if ($request->hasFile('archivo')) {
                 $originalName = $request->file('archivo')->getClientOriginalName();
@@ -50,6 +50,21 @@ class BibliotecaController extends Controller
             }
 
             $biblioteca = Biblioteca::create($validated);
+
+            // Registrar actividad
+            $this->logActivity(
+                'crear',
+                'documentos',
+                'Se creó un nuevo documento: ' . $biblioteca->titulo,
+                [
+                    'tipo' => $biblioteca->tipo_documento,
+                    'denominacion' => $biblioteca->denominacion,
+                    'codigo' => $biblioteca->denominacion_numerica
+                ]
+            );
+
+             // Registrar en las estadísticas diarias
+            $this->recordDailyStat($biblioteca->tipo_documento);
 
             return response()->json([
                 'message' => 'Documento guardado exitosamente',
@@ -129,18 +144,18 @@ class BibliotecaController extends Controller
         return response()->json(['message' => 'Registro eliminado correctamente']);
     }
     protected function recordDailyStat($tipoDocumento)
-    {
-        $today = Carbon::today()->toDateString();
-        $userId = Auth::id();
+{
+    $today = Carbon::today()->toDateString();
+    $userId = Auth::id();
 
-        $stat = DailyUserStat::firstOrNew([
-            'user_id' => $userId,
-            'fecha' => $today,
-            'tipo_documento' => $tipoDocumento,
-        ]);
+    $stat = DailyUserStat::firstOrNew([
+        'user_id' => $userId,
+        'fecha' => $today,
+        'tipo_documento' => $tipoDocumento,
+    ]);
 
-        // Si ya existe, incrementa, si no, inicializa con 1
-        $stat->documentos_procesados = $stat->exists ? $stat->documentos_procesados + 1 : 1;
-        $stat->save();
-    }
+    // Si ya existe, incrementa, si no, inicializa con 1
+    $stat->documentos_procesados = $stat->exists ? $stat->documentos_procesados + 1 : 1;
+    $stat->save();
+}
 }
