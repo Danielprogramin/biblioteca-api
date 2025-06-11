@@ -18,7 +18,7 @@ class BibliotecaController extends Controller
 
     public function index()
     {
-        $bibliotecas = Biblioteca::paginate(15);
+        $bibliotecas = Biblioteca::paginate(6);
         return response()->json($bibliotecas);
     }
 

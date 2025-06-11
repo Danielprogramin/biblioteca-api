@@ -96,83 +96,91 @@ class AuditLogController extends Controller
     }
 
     // Estadísticas por usuario
-    public function userStats()
-    {
-        $stats = AuditLog::select(
-                'usuario',
-                DB::raw("SUM(CASE WHEN accion = 'crear' AND modulo = 'documentos' THEN 1 ELSE 0 END) as documentosCreados"),
-                DB::raw("SUM(CASE WHEN accion = 'editar' AND modulo = 'documentos' THEN 1 ELSE 0 END) as documentosEditados"),
-                DB::raw("SUM(CASE WHEN accion = 'consultar' AND modulo = 'documentos' THEN 1 ELSE 0 END) as consultasRealizadas"),
-                DB::raw("MAX(created_at) as ultimaActividad")
-            )
-            ->groupBy('usuario')
-            ->get();
+    public function userStats(Request $request)
+{
+    $perPage = $request->input('per_page', 15);
 
-        // (Opcional) Puedes calcular el tiempo de sesión usando UserSession
-        foreach ($stats as $stat) {
-            $stat->tiempoSesion = UserSession::where('user_id', function($q) use ($stat) {
-                $q->select('id')->from('users')->where('username', $stat->usuario)->limit(1);
-            })->sum('duracion_minutos');
-            $stat->tiempoSesion = $stat->tiempoSesion ? gmdate("H\h i\m", $stat->tiempoSesion * 60) : "0h 0m";
-        }
+    $stats = AuditLog::select(
+            'usuario',
+            DB::raw("SUM(CASE WHEN accion = 'crear' AND modulo = 'documentos' THEN 1 ELSE 0 END) as documentosCreados"),
+            DB::raw("SUM(CASE WHEN accion = 'editar' AND modulo = 'documentos' THEN 1 ELSE 0 END) as documentosEditados"),
+            DB::raw("SUM(CASE WHEN accion = 'consultar' AND modulo = 'documentos' THEN 1 ELSE 0 END) as consultasRealizadas"),
+            DB::raw("MAX(created_at) as ultimaActividad")
+        )
+        ->groupBy('usuario')
+        ->paginate($perPage);
 
-        return response()->json($stats);
+    // (Opcional) Puedes calcular el tiempo de sesión usando UserSession
+    foreach ($stats as $stat) {
+        $stat->tiempoSesion = UserSession::where('user_id', function($q) use ($stat) {
+            $q->select('id')->from('users')->where('username', $stat->usuario)->limit(1);
+        })->sum('duracion_minutos');
+        $stat->tiempoSesion = $stat->tiempoSesion ? gmdate("H\h i\m", $stat->tiempoSesion * 60) : "0h 0m";
     }
+
+    return response()->json($stats);
+}
 
     public function getDailyStats(Request $request)
-{
-    $request->validate([
-        'fecha_desde' => 'nullable|date',
-        'fecha_hasta' => 'nullable|date|after_or_equal:fecha_desde',
-        'usuario' => 'nullable|exists:users,id',
-    ]);
+    {
+        $request->validate([
+            'fecha_desde' => 'nullable|date',
+            'fecha_hasta' => 'nullable|date|after_or_equal:fecha_desde',
+            'usuario' => 'nullable|exists:users,id',
+            'per_page' => 'nullable|integer|min:1',
+        ]);
 
-    // Consulta base para PostgreSQL
-    $query = AuditLog::query()
-        ->where('accion', 'crear')
-        ->where('modulo', 'documentos')
-        ->whereNotNull('detalles')
-        ->select(
-            DB::raw("DATE(created_at) as fecha"),
-            'user_id',
-            DB::raw("COUNT(*) as total"),
-            DB::raw("SUM(CASE WHEN detalles::json->>'tipo' = 'LIBROS' THEN 1 ELSE 0 END) as libros"),
-            DB::raw("SUM(CASE WHEN detalles::json->>'tipo' = 'LIBROS_ANILLADOS' THEN 1 ELSE 0 END) as libros_anillados"),
-            DB::raw("SUM(CASE WHEN detalles::json->>'tipo' = 'AZS' THEN 1 ELSE 0 END) as azs")
-        )
-        ->groupBy(DB::raw('DATE(created_at)'), 'user_id') // PostgreSQL requiere agrupar por la expresión, no el alias
-        ->orderBy('fecha', 'desc');
+        // Consulta base para PostgreSQL
+        $query = AuditLog::query()
+            ->where('accion', 'crear')
+            ->where('modulo', 'documentos')
+            ->whereNotNull('detalles')
+            ->select(
+                DB::raw("DATE(created_at) as fecha"),
+                'user_id',
+                DB::raw("COUNT(*) as total"),
+                DB::raw("SUM(CASE WHEN detalles::json->>'tipo' = 'LIBROS' THEN 1 ELSE 0 END) as libros"),
+                DB::raw("SUM(CASE WHEN detalles::json->>'tipo' = 'LIBROS_ANILLADOS' THEN 1 ELSE 0 END) as libros_anillados"),
+                DB::raw("SUM(CASE WHEN detalles::json->>'tipo' = 'AZS' THEN 1 ELSE 0 END) as azs")
+            )
+            ->groupBy(DB::raw('DATE(created_at)'), 'user_id')
+            ->orderBy('fecha', 'desc');
 
-    // Filtrar por rango de fechas
-    if ($request->fecha_desde) {
-        $query->whereDate('created_at', '>=', $request->fecha_desde);
+        // Filtrar por rango de fechas
+        if ($request->fecha_desde) {
+            $query->whereDate('created_at', '>=', $request->fecha_desde);
+        }
+
+        if ($request->fecha_hasta) {
+            $query->whereDate('created_at', '<=', $request->fecha_hasta);
+        }
+
+        // Filtrar por usuario
+        if ($request->usuario && $request->usuario !== 'todos') {
+            $query->where('user_id', $request->usuario);
+        }
+
+        $perPage = $request->input('per_page', 15);
+
+        // Paginar resultados
+        $stats = $query->paginate($perPage);
+
+        // Calcular totales del período (sobre todos los resultados, no solo la página actual)
+        // Si quieres los totales solo de la página actual, usa $stats->getCollection()->sum('libros'), etc.
+        $allStats = (clone $query)->get();
+        $periodTotals = [
+            'libros' => $allStats->sum('libros'),
+            'libros_anillados' => $allStats->sum('libros_anillados'),
+            'azs' => $allStats->sum('azs'),
+            'total' => $allStats->sum('total')
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $stats,
+            'period_totals' => $periodTotals,
+        ]);
     }
-
-    if ($request->fecha_hasta) {
-        $query->whereDate('created_at', '<=', $request->fecha_hasta);
-    }
-
-    // Filtrar por usuario
-    if ($request->usuario && $request->usuario !== 'todos') {
-        $query->where('user_id', $request->usuario);
-    }
-
-    $stats = $query->get();
-
-    // Calcular totales del período
-    $periodTotals = [
-        'libros' => $stats->sum('libros'),
-        'libros_anillados' => $stats->sum('libros_anillados'),
-        'azs' => $stats->sum('azs'),
-        'total' => $stats->sum('total')
-    ];
-
-    return response()->json([
-        'success' => true,
-        'data' => $stats,
-        'period_totals' => $periodTotals,
-    ]);
-}
 
     protected function applyQuickFilter($filter)
     {

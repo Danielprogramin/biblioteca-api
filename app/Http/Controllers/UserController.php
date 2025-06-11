@@ -17,13 +17,23 @@ class UserController extends Controller
      */
     public function index()
     {
-        try {
-            $usuarios = User::paginate(15);
+        // $usuarios =User::paginate(15);
+        // return response()->json([
+        //     'success' => true,
+        //     'data' => $usuarios,
+        // ], 200);
+        $usuarios = User::paginate(15);
 
-            return $this->success('Usuarios obtenidos correctamente.', $usuarios);
-        } catch (\Exception $e) {
-            return $this->error('Error al obtener usuarios.', 500);
-        }
+        return response()->json([
+        'success' => true,
+        'data' => $usuarios->items(),
+        'meta' => [
+            'current_page' => $usuarios->currentPage(),
+            'last_page' => $usuarios->lastPage(),
+            'per_page' => $usuarios->perPage(),
+            'total' => $usuarios->total(),
+        ],
+    ], 200);
     }
 
     /**
