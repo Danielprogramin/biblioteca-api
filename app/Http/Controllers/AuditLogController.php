@@ -120,60 +120,64 @@ class AuditLogController extends Controller
     }
 
     public function getDailyStats(Request $request)
-    {
-        $request->validate([
-            'fecha_desde' => 'nullable|date',
-            'fecha_hasta' => 'nullable|date|after_or_equal:fecha_desde',
-            'usuario' => 'nullable|exists:users,id',
-        ]);
+{
+    $request->validate([
+        'fecha_desde' => 'nullable|date',
+        'fecha_hasta' => 'nullable|date|after_or_equal:fecha_desde',
+        'usuario' => 'nullable|exists:users,id',
+    ]);
 
-        $query = DailyUserStat::query()
-            ->select([
-                'fecha',
-                'user_id',
-                DB::raw("SUM(CASE WHEN tipo_documento = 'libros' THEN documentos_procesados ELSE 0 END) as libros"),
-                DB::raw("SUM(CASE WHEN tipo_documento = 'libros_anillados' THEN documentos_procesados ELSE 0 END) as libros_anillados"),
-                DB::raw("SUM(CASE WHEN tipo_documento = 'azs' THEN documentos_procesados ELSE 0 END) as azs"),
-                DB::raw("SUM(documentos_procesados) as total")
-            ])
-            ->groupBy('fecha', 'user_id')
-            ->orderBy('fecha', 'desc');
+    // Consulta base para PostgreSQL
+    $query = AuditLog::query()
+        ->where('accion', 'crear')
+        ->where('modulo', 'documentos')
+        ->whereNotNull('detalles')
+        ->select(
+            DB::raw("DATE(created_at) as fecha"),
+            'user_id',
+            DB::raw("COUNT(*) as total"),
+            DB::raw("SUM(CASE WHEN detalles::json->>'tipo' = 'LIBROS' THEN 1 ELSE 0 END) as libros"),
+            DB::raw("SUM(CASE WHEN detalles::json->>'tipo' = 'LIBROS_ANILLADOS' THEN 1 ELSE 0 END) as libros_anillados"),
+            DB::raw("SUM(CASE WHEN detalles::json->>'tipo' = 'AZS' THEN 1 ELSE 0 END) as azs")
+        )
+        ->groupBy(DB::raw('DATE(created_at)'), 'user_id') // PostgreSQL requiere agrupar por la expresión, no el alias
+        ->orderBy('fecha', 'desc');
 
-        // Filtrar por rango de fechas
-        if ($request->fecha_desde) {
-            $query->where('fecha', '>=', $request->fecha_desde);
-        }
-
-        if ($request->fecha_hasta) {
-            $query->where('fecha', '<=', $request->fecha_hasta);
-        }
-
-        // Filtrar por usuario
-        if ($request->usuario && $request->usuario !== 'todos') {
-            $query->where('user_id', $request->usuario);
-        }
-
-        $stats = $query->get();
-
-        // Calcular totales del período
-        $periodTotals = [
-            'libros' => $stats->sum('libros'),
-            'libros_anillados' => $stats->sum('libros_anillados'),
-            'azs' => $stats->sum('azs'),
-            'total' => $stats->sum('total')
-        ];
-
-        return response()->json([
-            'success' => true,
-            'data' => $stats,
-            'period_totals' => $periodTotals,
-        ]);
+    // Filtrar por rango de fechas
+    if ($request->fecha_desde) {
+        $query->whereDate('created_at', '>=', $request->fecha_desde);
     }
+
+    if ($request->fecha_hasta) {
+        $query->whereDate('created_at', '<=', $request->fecha_hasta);
+    }
+
+    // Filtrar por usuario
+    if ($request->usuario && $request->usuario !== 'todos') {
+        $query->where('user_id', $request->usuario);
+    }
+
+    $stats = $query->get();
+
+    // Calcular totales del período
+    $periodTotals = [
+        'libros' => $stats->sum('libros'),
+        'libros_anillados' => $stats->sum('libros_anillados'),
+        'azs' => $stats->sum('azs'),
+        'total' => $stats->sum('total')
+    ];
+
+    return response()->json([
+        'success' => true,
+        'data' => $stats,
+        'period_totals' => $periodTotals,
+    ]);
+}
 
     protected function applyQuickFilter($filter)
     {
         $today = Carbon::today();
-        
+
         switch ($filter) {
             case 'hoy':
                 return [
