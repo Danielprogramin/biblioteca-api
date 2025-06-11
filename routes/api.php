@@ -28,6 +28,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
 });
 
+Route::middleware('auth:sanctum')->get('/usuariosrol', function (Request $request) {
+    $user = $request->user();
+
+    return response()->json([
+        'id' => $user->id,
+        'username' => $user->username,
+        'email' => $user->email,
+        'role' => $user->getRoleNames()->first(), // 👈 importante para el frontend
+    ]);
+});
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('bibliotecas', BibliotecaController::class);
 });
@@ -43,6 +54,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/audit-logs/export', [AuditLogController::class, 'export']);
     Route::get('/audit-logs/user-stats', [AuditLogController::class, 'userStats']);
     Route::get('/audit-logs/daily-stats', [AuditLogController::class, 'getDailyStats']);
-    
+
 });
 
