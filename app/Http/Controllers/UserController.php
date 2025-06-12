@@ -25,15 +25,15 @@ class UserController extends Controller
         $usuarios = User::paginate(15);
 
         return response()->json([
-        'success' => true,
-        'data' => $usuarios->items(),
-        'meta' => [
-            'current_page' => $usuarios->currentPage(),
-            'last_page' => $usuarios->lastPage(),
-            'per_page' => $usuarios->perPage(),
-            'total' => $usuarios->total(),
-        ],
-    ], 200);
+            'success' => true,
+            'data' => $usuarios->items(),
+            'meta' => [
+                'current_page' => $usuarios->currentPage(),
+                'last_page' => $usuarios->lastPage(),
+                'per_page' => $usuarios->perPage(),
+                'total' => $usuarios->total(),
+            ],
+        ], 200);
     }
 
     /**
@@ -42,16 +42,19 @@ class UserController extends Controller
     public function store(StoreUserRequest $request)
     {
         try {
-
             $user = User::create([
                 'username' => $request->username,
                 'email' => $request->email,
                 'password' => bcrypt($request->password),
-                'is_admin' => $request->is_admin ?? false,
+                'is_admin' => $request->role === 'Admin',
                 'estado' => $request->estado ?? true,
                 'fecha_expiracion' => $request->fecha_expiracion,
-
             ]);
+
+            // ✅ Asignar el rol usando Spatie
+            if ($request->has('role')) {
+                $user->assignRole($request->role);
+            }
 
             return response()->json([
                 'success' => true,
@@ -94,16 +97,20 @@ class UserController extends Controller
     public function update(UpdateUserRequest $request, $id)
     {
         try {
-            // Buscar el usuario
             $user = User::findOrFail($id);
 
-            // Actualizar el usuario
+            // Actualizar datos básicos
             $user->update([
                 'username' => $request->username,
-                'is_admin' => $request->is_admin ?? $user->is_admin,
+                'is_admin' => $request->role === 'Admin',
                 'estado' => $request->estado ?? $user->estado,
                 'fecha_expiracion' => $request->fecha_expiracion ?? $user->fecha_expiracion,
             ]);
+
+            // ✅ Asignar nuevo rol si viene en la solicitud
+            if ($request->has('role')) {
+                $user->syncRoles([$request->role]); // Quita roles anteriores y asigna el nuevo
+            }
 
             return response()->json([
                 'success' => true,
@@ -118,6 +125,7 @@ class UserController extends Controller
             ], 500);
         }
     }
+
 
     /**
      * Remove the specified resource from storage.

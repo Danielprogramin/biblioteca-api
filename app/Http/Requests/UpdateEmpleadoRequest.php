@@ -32,6 +32,8 @@ class UpdateEmpleadoRequest extends FormRequest
             'numero_identificacion' => "required|string|max:11|unique:empleados,numero_identificacion,{$empleadoId}",
             'correo' => "required|email|max:255|unique:empleados,correo,{$empleadoId}",
             'telefono' => 'nullable|string|max:15',
+            'role' => 'sometimes|required|string|in:Admin,Digitador'
+
         ];
     }
 }

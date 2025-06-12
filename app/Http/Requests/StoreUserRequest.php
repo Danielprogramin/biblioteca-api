@@ -28,6 +28,7 @@ class StoreUserRequest extends FormRequest
             'is_admin' => 'required|boolean',
             'estado' => 'required|boolean',
             'fecha_expiracion' => 'nullable|date|after_or_equal:today',
+            'role' => 'required|string|in:Admin,Digitador',
         ];
     }
 }
