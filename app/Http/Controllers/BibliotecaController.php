@@ -38,7 +38,7 @@ class BibliotecaController extends Controller
             'pais' => 'required|string',
             'tomos' => 'required|array|min:1',
             'tomos.*.numero' => 'required|integer|min:1',
-            'tomos.*.archivo' => 'required|file|mimes:pdf|max:10240',
+            'tomos.*.archivo' => 'required|file|mimes:pdf|max:1000000', // Máximo 1GB
         ]);
 
         // Convertir a mayúsculas los campos de texto
@@ -153,8 +153,27 @@ class BibliotecaController extends Controller
             'tomo' => 'nullable|string',
             'año' => 'sometimes|required|integer',
             'pais' => 'sometimes|required|string',
-            'archivo' => 'nullable|file',
+            'archivo' => 'nullable|file|mimes:pdf|max:1000000',
         ]);
+
+        // Si se sube un nuevo archivo, reemplazar el anterior
+        if ($request->hasFile('archivo')) {
+            // Eliminar archivo anterior si existe
+            if ($biblioteca->archivo && file_exists('C:/archivos_biblioteca/' . $biblioteca->archivo)) {
+                @unlink('C:/archivos_biblioteca/' . $biblioteca->archivo);
+            }
+            $file = $request->file('archivo');
+            $originalName = $file->getClientOriginalName();
+            $nombreSinExtension = pathinfo($originalName, PATHINFO_FILENAME);
+            $nombreLimpio = preg_replace('/[^A-Za-z0-9_\-]/', '_', $nombreSinExtension);
+            $nombreLimpio = trim($nombreLimpio, "_");
+            $nuevoNombre = ($validated['denominacion_numerica'] ?? $biblioteca->denominacion_numerica) . '_' .
+                $nombreLimpio . '_' .
+                ($validated['año'] ?? $biblioteca->año) . '.' .
+                $file->getClientOriginalExtension();
+            $file->move('C:/archivos_biblioteca', $nuevoNombre);
+            $validated['archivo'] = $nuevoNombre;
+        }
 
         $biblioteca->update($validated);
 
