@@ -18,83 +18,119 @@ class BibliotecaController extends Controller
 
     public function index()
     {
-        $bibliotecas = Biblioteca::all();
+        $bibliotecas = Biblioteca::with('tomos')->get();
         return response()->json($bibliotecas);
     }
 
     public function store(Request $request)
-    {
-        try {
-            $validated = $request->validate([
-                'tipo_documento' => 'required|string',
-                'denominacion' => 'required|string',
-                'denominacion_numerica' => 'required|string',
-                'titulo' => 'required|string',
-                'autor' => 'required|string',
-                'editorial' => 'nullable|string',
-                'tomo' => 'nullable|string',
-                'año' => 'required|digits:4',
-                'pais' => 'required|string',
-                'archivo' => 'required|file|mimes:pdf|max:10240',
+{
+    DB::beginTransaction();
+
+    try {
+        $validated = $request->validate([
+            'tipo_documento' => 'required|string',
+            'denominacion' => 'required|string',
+            'denominacion_numerica' => 'required|string|unique:bibliotecas,denominacion_numerica',
+            'titulo' => 'required|string',
+            'autor' => 'required|string',
+            'editorial' => 'nullable|string',
+            'año' => 'required|digits:4',
+            'pais' => 'required|string',
+            'tomos' => 'required|array|min:1',
+            'tomos.*.numero' => 'required|integer|min:1',
+            'tomos.*.archivo' => 'required|file|mimes:pdf|max:10240',
+        ]);
+
+        // Convertir a mayúsculas los campos de texto
+        $bibliotecaData = [
+            'tipo_documento' => mb_strtoupper($validated['tipo_documento']),
+            'denominacion' => mb_strtoupper($validated['denominacion']),
+            'denominacion_numerica' => mb_strtoupper($validated['denominacion_numerica']),
+            'titulo' => mb_strtoupper($validated['titulo']),
+            'autor' => mb_strtoupper($validated['autor']),
+            'editorial' => isset($validated['editorial']) ? mb_strtoupper($validated['editorial']) : null,
+            'año' => $validated['año'],
+            'pais' => mb_strtoupper($validated['pais']),
+        ];
+
+        // Crear registro principal en bibliotecas
+        $biblioteca = Biblioteca::create($bibliotecaData);
+
+        // Procesar cada tomo
+        foreach ($request->tomos as $tomoData) {
+            $file = $tomoData['archivo'];
+            $originalName = $file->getClientOriginalName();
+
+            // Obtener nombre sin extensión
+            $nombreSinExtension = pathinfo($originalName, PATHINFO_FILENAME);
+
+            // Limpiar nombre: quitar caracteres no deseados
+            $nombreLimpio = preg_replace('/[^A-Za-z0-9_\-]/', '_', $nombreSinExtension);
+            $nombreLimpio = trim($nombreLimpio, "_");
+
+            // // Construir nuevo nombre con formato
+            // $nuevoNombre = $bibliotecaData['denominacion_numerica'] . '_' .
+            //                 $nombreLimpio . '_' .
+            //                 $bibliotecaData['año'] . '.' .
+            //                 $file->getClientOriginalExtension();
+            // Construir nuevo nombre con formato incluyendo tomo
+            $nuevoNombre = $bibliotecaData['denominacion_numerica'] . '_' .
+                            $nombreLimpio . '_' .
+                            $bibliotecaData['año'] . '_tomo' .
+                            $tomoData['numero'] . '.' .
+                            $file->getClientOriginalExtension();
+
+            // Mover archivo al directorio con nuevo nombre
+            $file->move('C:/archivos_biblioteca', $nuevoNombre);
+
+            // Crear registro de tomo
+            $biblioteca->tomos()->create([
+                'numero' => $tomoData['numero'],
+                'archivo' => $nuevoNombre
             ]);
-
-            // Convertir a mayúsculas los campos deseados
-            $validated['tipo_documento'] = mb_strtoupper($validated['tipo_documento']);
-            $validated['denominacion'] = mb_strtoupper($validated['denominacion']);
-            $validated['denominacion_numerica'] = mb_strtoupper($validated['denominacion_numerica']);
-            $validated['titulo'] = mb_strtoupper($validated['titulo']);
-            $validated['autor'] = mb_strtoupper($validated['autor']);
-            if (isset($validated['editorial'])) {
-                $validated['editorial'] = mb_strtoupper($validated['editorial']);
-            }
-            if (isset($validated['tomo'])) {
-                $validated['tomo'] = mb_strtoupper($validated['tomo']);
-            }
-            $validated['pais'] = mb_strtoupper($validated['pais']);
-
-            if ($request->hasFile('archivo')) {
-                $originalName = $request->file('archivo')->getClientOriginalName();
-                // Guardar en C:\archivos_biblioteca
-                $destino = 'C:/archivos_biblioteca/' . $originalName;
-                $request->file('archivo')->move('C:/archivos_biblioteca', $originalName);
-                $validated['archivo'] = $originalName; // Solo el nombre, ya que la ruta es fija
-            }
-
-            $biblioteca = Biblioteca::create($validated);
-
-            // Registrar actividad
-            $this->logActivity(
-                'crear',
-                'documentos',
-                'Se creó un nuevo documento: ' . $biblioteca->titulo,
-                [
-                    'tipo' => $biblioteca->tipo_documento,
-                    'denominacion' => $biblioteca->denominacion,
-                    'codigo' => $biblioteca->denominacion_numerica
-                ]
-            );
-
-            // Registrar en las estadísticas diarias
-            $this->recordDailyStat($biblioteca->tipo_documento);
-
-            return response()->json([
-                'message' => 'Documento guardado exitosamente',
-                'data' => $biblioteca
-            ], 201);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'message' => 'Error de validación',
-                'errors' => $e->errors()
-            ], 422);
-        } catch (\Exception $e) {
-            Log::error('Error al guardar documento: ' . $e->getMessage());
-            return response()->json([
-                'message' => 'Error interno del servidor',
-                'error' => $e->getMessage()
-            ], 500);
         }
+
+        // Registrar actividad
+        $this->logActivity(
+            'crear',
+            'documentos',
+            'Se creó un nuevo documento: ' . $biblioteca->titulo,
+            [
+                'tipo' => $biblioteca->tipo_documento,
+                'denominacion' => $biblioteca->denominacion,
+                'codigo' => $biblioteca->denominacion_numerica,
+                'tomos' => count($request->tomos)
+            ]
+        );
+
+        // Registrar en las estadísticas diarias
+        $this->recordDailyStat($biblioteca->tipo_documento);
+
+        DB::commit();
+
+        return response()->json([
+            'message' => 'Documento y tomos guardados exitosamente',
+            'data' => [
+                'biblioteca' => $biblioteca,
+                'tomos' => $biblioteca->tomos
+            ]
+        ], 201);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        DB::rollBack();
+        return response()->json([
+            'message' => 'Error de validación',
+            'errors' => $e->errors()
+        ], 422);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error al guardar documento: ' . $e->getMessage());
+        return response()->json([
+            'message' => 'Error interno del servidor',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     public function show(string $id)
     {
@@ -174,34 +210,17 @@ class BibliotecaController extends Controller
     /**
      * Descargar archivo adjunto con nombre personalizado
      */
-    public function descargarArchivo($id)
-    {
-        $biblioteca = Biblioteca::findOrFail($id);
-        // Obtener datos necesarios
-        $denominacionNumerica = $biblioteca->denominacion_numerica;
-        $archivo = $biblioteca->archivo; // solo el nombre del archivo
-        $año = $biblioteca->año;
+    public function descargarArchivo(Request $request) // ✅ Elimina $id
+{
+    $archivoSolicitado = $request->query('file');
+    $ruta = 'C:/archivos_biblioteca/' . $archivoSolicitado;
 
-        // Obtener nombre original del archivo
-        $nombreOriginal = pathinfo($archivo, PATHINFO_FILENAME);
-        $extension = pathinfo($archivo, PATHINFO_EXTENSION);
-
-        // Limpiar nombre: quitar guiones bajos extra y espacios
-        $nombreOriginalLimpio = trim($nombreOriginal, "_ ");
-        $nuevoNombre = $denominacionNumerica . '_'. $nombreOriginalLimpio . '_' . $año . '.' . $extension;
-
-        // Ruta absoluta al archivo en C:\archivos_biblioteca
-        $ruta = 'C:/archivos_biblioteca/' . $archivo;
-
-        if (!file_exists($ruta)) {
-            return response()->json(['message' => 'Archivo no encontrado'], 404);
-        }
-        // Mostrar PDF en el navegador con el nombre correcto
-        return response()->file($ruta, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="' . $nuevoNombre . '"; filename*=UTF-8\'' . rawurlencode($nuevoNombre),
-            'Access-Control-Expose-Headers' => 'Content-Disposition',
-        ]);
-
+    if (!file_exists($ruta)) {
+        return response()->json(['message' => 'Archivo no encontrado'], 404);
     }
+
+    return response()->download($ruta, $archivoSolicitado, [
+        'Content-Type' => 'application/pdf',
+    ]);
+}
 }

@@ -15,10 +15,13 @@ class Biblioteca extends Model
         'titulo',
         'autor',
         'editorial',
-        'tomo',
         'año',
         'pais',
-        'archivo'
     ];
+
+    public function tomos()
+    {
+        return $this->hasMany(Tomo::class);
+    }
 
 }
