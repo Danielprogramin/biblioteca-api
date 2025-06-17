@@ -7,6 +7,7 @@ use App\Models\Biblioteca;
 use Illuminate\Support\Facades\Log;
 use App\Traits\logActivity;
 use App\Models\DailyUserStat;
+use App\Models\Tomo;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -38,7 +39,7 @@ class BibliotecaController extends Controller
             'pais' => 'required|string',
             'tomos' => 'required|array|min:1',
             'tomos.*.numero' => 'required|integer|min:1',
-            'tomos.*.archivo' => 'required|file|mimes:pdf|max:1000000', // Máximo 1GB
+            'tomos.*.archivo' => 'required|file|mimetypes:application/pdf,application/x-pdf|max:1000000',
         ]);
 
         // Convertir a mayúsculas los campos de texto
@@ -139,47 +140,112 @@ class BibliotecaController extends Controller
     }
 
     public function update(Request $request, string $id)
-    {
+{
+    DB::beginTransaction();
+
+    try {
         $biblioteca = Biblioteca::findOrFail($id);
         $datosAntes = $biblioteca->toArray();
 
         $validated = $request->validate([
             'tipo_documento' => 'sometimes|required|string',
             'denominacion' => 'sometimes|required|string',
-            'denominacion_numerica' => 'sometimes|required|string',
+            'denominacion_numerica' => 'sometimes|required|string|unique:bibliotecas,denominacion_numerica,' . $biblioteca->id,
             'titulo' => 'sometimes|required|string',
             'autor' => 'sometimes|required|string',
-            'editorial' => 'sometimes|required|string',
-            'tomo' => 'nullable|string',
-            'año' => 'sometimes|required|integer',
+            'editorial' => 'sometimes|nullable|string',
+            'año' => 'sometimes|required|digits:4',
             'pais' => 'sometimes|required|string',
-            'archivo' => 'nullable|file|mimes:pdf|max:1000000',
+            'tomos' => 'sometimes|array|min:1',
+            'tomos.*.numero' => 'required|integer|min:1',
+           'tomos.*.archivo' => 'sometimes|required|file|mimetypes:application/pdf,application/x-pdf|max:1000000',
+            'tomos.*.id' => 'sometimes|integer|exists:tomos,id',
+            'tomos_eliminados' => 'sometimes|array',
+            'tomos_eliminados.*' => 'integer|exists:tomos,id',
         ]);
 
-        // Si se sube un nuevo archivo, reemplazar el anterior
-        if ($request->hasFile('archivo')) {
-            // Eliminar archivo anterior si existe
-            if ($biblioteca->archivo && file_exists('C:/archivos_biblioteca/' . $biblioteca->archivo)) {
-                @unlink('C:/archivos_biblioteca/' . $biblioteca->archivo);
+        // Convertir a mayúsculas los campos de texto
+        $updateData = [];
+        $textFields = ['tipo_documento', 'denominacion', 'denominacion_numerica', 'titulo', 'autor', 'editorial', 'pais'];
+        foreach ($textFields as $field) {
+            if (isset($validated[$field])) {
+                $updateData[$field] = mb_strtoupper($validated[$field]);
             }
-            $file = $request->file('archivo');
-            $originalName = $file->getClientOriginalName();
-            $nombreSinExtension = pathinfo($originalName, PATHINFO_FILENAME);
-            $nombreLimpio = preg_replace('/[^A-Za-z0-9_\-]/', '_', $nombreSinExtension);
-            $nombreLimpio = trim($nombreLimpio, "_");
-            $nuevoNombre = ($validated['denominacion_numerica'] ?? $biblioteca->denominacion_numerica) . '_' .
-                $nombreLimpio . '_' .
-                ($validated['año'] ?? $biblioteca->año) . '.' .
-                $file->getClientOriginalExtension();
-            $file->move('C:/archivos_biblioteca', $nuevoNombre);
-            $validated['archivo'] = $nuevoNombre;
+        }
+        if (isset($validated['año'])) {
+            $updateData['año'] = $validated['año'];
         }
 
-        $biblioteca->update($validated);
+        // Actualizar el documento principal
+        $biblioteca->update($updateData);
+
+        // Procesar tomos eliminados
+        if (isset($validated['tomos_eliminados'])) {
+            $tomosEliminados = Tomo::whereIn('id', $validated['tomos_eliminados'])->get();
+            foreach ($tomosEliminados as $tomo) {
+                if ($tomo->archivo && file_exists('C:/archivos_biblioteca/' . $tomo->archivo)) {
+                    @unlink('C:/archivos_biblioteca/' . $tomo->archivo);
+                }
+                $tomo->delete();
+            }
+        }
+
+        // Procesar tomos (actualizar existentes y agregar nuevos)
+        if (isset($validated['tomos'])) {
+            foreach ($validated['tomos'] as $tomoData) {
+                if (isset($tomoData['id'])) {
+                    $tomo = Tomo::find($tomoData['id']);
+                    if ($tomo) {
+                        $tomo->numero = $tomoData['numero'];
+
+                        if (isset($tomoData['archivo']) && $tomoData['archivo'] instanceof \Illuminate\Http\UploadedFile) {
+                            if ($tomo->archivo && file_exists('C:/archivos_biblioteca/' . $tomo->archivo)) {
+                                @unlink('C:/archivos_biblioteca/' . $tomo->archivo);
+                            }
+
+                            $file = $tomoData['archivo'];
+                            $originalName = $file->getClientOriginalName();
+                            $nombreSinExtension = pathinfo($originalName, PATHINFO_FILENAME);
+                            $nombreLimpio = preg_replace('/[^A-Za-z0-9_\-]/', '_', $nombreSinExtension);
+                            $nombreLimpio = trim($nombreLimpio, "_");
+                            $nuevoNombre = $biblioteca->denominacion_numerica . '_' .
+                                            $nombreLimpio . '_' .
+                                            $biblioteca->año . '_tomo' .
+                                            $tomoData['numero'] . '.' .
+                                            $file->getClientOriginalExtension();
+
+                            $file->move('C:/archivos_biblioteca', $nuevoNombre);
+                            $tomo->archivo = $nuevoNombre;
+                        }
+
+                        $tomo->save();
+                    }
+                } else {
+                    // Es un nuevo tomo
+                    $file = $tomoData['archivo'];
+                    $originalName = $file->getClientOriginalName();
+                    $nombreSinExtension = pathinfo($originalName, PATHINFO_FILENAME);
+                    $nombreLimpio = preg_replace('/[^A-Za-z0-9_\-]/', '_', $nombreSinExtension);
+                    $nombreLimpio = trim($nombreLimpio, "_");
+                    $nuevoNombre = $biblioteca->denominacion_numerica . '_' .
+                                    $nombreLimpio . '_' .
+                                    $biblioteca->año . '_tomo' .
+                                    $tomoData['numero'] . '.' .
+                                    $file->getClientOriginalExtension();
+
+                    $file->move('C:/archivos_biblioteca', $nuevoNombre);
+
+                    $biblioteca->tomos()->create([
+                        'numero' => $tomoData['numero'],
+                        'archivo' => $nuevoNombre
+                    ]);
+                }
+            }
+        }
 
         // Registrar actividad
         $this->logActivity(
-            'actualizar',
+            'editar',
             'documentos',
             'Se actualizó el documento: ' . $biblioteca->titulo,
             [
@@ -188,8 +254,28 @@ class BibliotecaController extends Controller
             ]
         );
 
-        return response()->json($biblioteca);
+        DB::commit();
+
+        return response()->json([
+            'message' => 'Documento actualizado exitosamente',
+            'data' => $biblioteca->load('tomos')
+        ]);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        DB::rollBack();
+        return response()->json([
+            'message' => 'Error de validación',
+            'errors' => $e->errors()
+        ], 422);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error al actualizar documento: ' . $e->getMessage());
+        return response()->json([
+            'message' => 'Error interno del servidor',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     public function destroy(string $id)
     {
