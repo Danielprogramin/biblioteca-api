@@ -42,6 +42,8 @@ Route::middleware('auth:sanctum')->get('/usuariosrol', function (Request $reques
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('bibliotecas/descargar', [BibliotecaController::class, 'descargarArchivo']);
     Route::apiResource('bibliotecas', BibliotecaController::class);
+    Route::get('/denominaciones', [BibliotecaController::class, 'denominaciones']);
+    Route::get('/tipos', [BibliotecaController::class, 'tiposDocumento']);
 });
 
 Route::get('/dashboard', function () {
