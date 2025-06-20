@@ -351,4 +351,33 @@ class BibliotecaController extends Controller
         ]);
     }
 
+    public function actividadMensual()
+{
+    $inicioMes = Carbon::now()->startOfMonth();
+    $finMes = Carbon::now()->endOfMonth();
+
+    // Documentos registrados por día (acción: crear)
+    $registros = DB::table('audit_logs')
+        ->selectRaw('DATE(created_at) as fecha, COUNT(*) as total')
+        ->where('accion', 'crear')
+        ->whereBetween('created_at', [$inicioMes, $finMes])
+        ->groupBy(DB::raw('DATE(created_at)'))
+        ->orderBy('fecha')
+        ->get();
+
+    // Consultas por día (acción: consultar)
+    $consultas = DB::table('audit_logs')
+        ->selectRaw('DATE(created_at) as fecha, COUNT(*) as total')
+        ->where('accion', 'consultar')
+        ->whereBetween('created_at', [$inicioMes, $finMes])
+        ->groupBy(DB::raw('DATE(created_at)'))
+        ->orderBy('fecha')
+        ->get();
+
+    return response()->json([
+        'registros' => $registros,
+        'consultas' => $consultas,
+    ]);
+}
+
 }

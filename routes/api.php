@@ -44,6 +44,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('bibliotecas', BibliotecaController::class);
     Route::get('/denominaciones', [BibliotecaController::class, 'denominaciones']);
     Route::get('/tipos', [BibliotecaController::class, 'tiposDocumento']);
+    Route::get('/actividad-mensual', [BibliotecaController::class, 'actividadMensual']);
 });
 
 Route::get('/dashboard', function () {
